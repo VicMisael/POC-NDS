@@ -22,15 +22,57 @@ import java.net.Socket
 
 
 class Registered : AppCompatActivity() {
-    val TYPE = "_poc_tcp";
-    val nsdManager = (getSystemService(Context.NSD_SERVICE) as NsdManager)
+    val TYPE = "_poc._tcp";
+    lateinit var nsdManager: NsdManager;
     lateinit var serviceName: String;
     lateinit var serverSocket: ServerSocket;
-    var SERVERPORT: Int = -1;
+    var SERVERPORT: Int = 4499;
     lateinit var text: TextView;
     var serverThread: Thread? = null
     var socket: Socket? = null
     var updateConversationHandler: Handler? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        Log.e("PDM","REGISTERED")
+        setContentView(R.layout.activity_registered)
+        nsdManager = (getSystemService(Context.NSD_SERVICE) as NsdManager)
+        text = findViewById(R.id.chat)
+        Log.e("PDM", "PORT:" + SERVERPORT)
+        val name = intent.getStringExtra("serviceName").toString()
+        registerService(name, SERVERPORT)
+        updateConversationHandler = Handler()
+        val button = findViewById<Button>(R.id.send);
+
+        this.serverThread = Thread(ServerThread())
+        this.serverThread!!.start()
+
+        button.setOnClickListener {
+            Log.e("PDM","CLICKED")
+            val message = findViewById<TextView>(R.id.message).text.toString()
+            try {
+                Log.e("PDM", (socket != null).toString());
+                val outputStream=socket?.getOutputStream();
+                val out = PrintWriter(
+                    BufferedWriter(
+                        OutputStreamWriter(outputStream)
+                    ),
+                    true
+                )
+
+                out.println(message)
+                Log.e("PDM",message)
+                updateUIThread(message)
+            } catch (e: Exception) {
+                Log.e("ERRO",e.stackTraceToString())
+                Log.e("PDM",e.toString())
+            }
+        }
+
+
+
+    }
+
 
     private val registrationListener = object : NsdManager.RegistrationListener {
 
@@ -58,40 +100,6 @@ class Registered : AppCompatActivity() {
         }
     }
 
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_registered)
-        text = findViewById(R.id.chat)
-         ServerSocket(0).also { socket ->
-            // Store the chosen port.
-            SERVERPORT = socket.localPort
-        }
-        val name = intent.getStringExtra("serviceName").toString()
-        registerService(name, SERVERPORT)
-
-        val button=findViewById<Button>(R.id.send);
-        button.setOnClickListener {
-            val message=findViewById<TextView>(R.id.message).text.toString()
-            try {
-                val out = PrintWriter(
-                    BufferedWriter(
-                        OutputStreamWriter(socket?.getOutputStream() )
-                    ),
-                    true
-                )
-                out.println(message)
-            }catch (_:Exception){
-
-            }
-        }
-        updateConversationHandler = Handler()
-
-        this.serverThread = Thread(ServerThread())
-        this.serverThread!!.start()
-
-    }
-
     override fun onStop() {
         super.onStop()
         nsdManager.apply {
@@ -110,27 +118,25 @@ class Registered : AppCompatActivity() {
             try {
                 serverSocket = ServerSocket(SERVERPORT)
                 socket = serverSocket.accept()
+
+
             } catch (e: IOException) {
-                e.printStackTrace()
+                Log.e("PDM",e.toString())
             }
-            while (!Thread.currentThread().isInterrupted) {
-                try {
-                    val commThread = socket?.let { CommunicationThread(it) }
-                    Thread(commThread).start()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-            }
+            val commThread = socket?.let { CommunicationThread(it) }
+            Thread(commThread).start()
         }
     }
 
-    inner class CommunicationThread(private val clientSocket: Socket) : Runnable {
+    inner class CommunicationThread(clientSocket: Socket) : Runnable {
         private var input: BufferedReader? = null
 
         init {
             try {
+
                 input = BufferedReader(InputStreamReader(clientSocket.getInputStream()))
             } catch (e: IOException) {
+                Log.e("PDM",e.stackTrace.toString())
                 e.printStackTrace()
             }
         }
@@ -139,6 +145,8 @@ class Registered : AppCompatActivity() {
             while (!Thread.currentThread().isInterrupted) {
                 try {
                     val read = input!!.readLine()
+                    print("reading")
+                    Log.e("PDM", read)
                     updateConversationHandler?.post(updateUIThread(read))
                 } catch (e: IOException) {
                     e.printStackTrace()
@@ -149,13 +157,15 @@ class Registered : AppCompatActivity() {
 
     inner class updateUIThread(private val msg: String) : Runnable {
         override fun run() {
+            Log.e("PDM",msg)
             text.text = text.getText().toString() + "Usuario: " + msg + "\n"
         }
     }
 
 
-    fun registerService(service: String, port: Int) {
+    private fun registerService(service: String, port: Int) {
         // Create the NsdServiceInfo object, and populate it.
+        Log.e("PDM","registering")
         val serviceInfo = NsdServiceInfo().apply {
             // The name is subject to change based on conflicts
             // with other services advertised on the same network.

@@ -21,28 +21,30 @@ import java.net.Socket
 
 
 class Logged : AppCompatActivity() {
-    val TYPE = "_poc_tcp";
+    val TYPE = "_poc._tcp";
     val TAG = "PDM"
-    val nsdManager = (getSystemService(Context.NSD_SERVICE) as NsdManager)
+    lateinit var  nsdManager:NsdManager;
     var SERVERPORT: Int = -1;
     lateinit var text: TextView;
     var mServiceName: String = ""
     lateinit var mService: NsdServiceInfo
-    var port: Int = -1
+    var port: Int = 4499
     lateinit var host: InetAddress
     private var socket: Socket? = null
     var updateConversationHandler: Handler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        nsdManager = (getSystemService(Context.NSD_SERVICE) as NsdManager)
         setContentView(R.layout.activity_logged)
         mServiceName = intent.getStringExtra("serviceName").toString()
         updateConversationHandler = Handler()
         text = findViewById(R.id.chat2)
+
         nsdManager.discoverServices(TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+
         val commThread = socket?.let { CommunicationThread(it) }
         val button: Button = findViewById(R.id.send2)
-
         button.setOnClickListener {
             val message=findViewById<TextView>(R.id.message).text.toString()
             try {
@@ -103,7 +105,7 @@ class Logged : AppCompatActivity() {
                     // connecting to. It could be "Bob's Chat App".
                     Log.d(TAG, "Same machine: $mServiceName")
 
-                service.serviceName.contains("NsdChat") -> nsdManager.resolveService(
+                service.serviceName.contains(mServiceName) -> nsdManager.resolveService(
                     service,
                     resolveListener
                 )
@@ -137,6 +139,7 @@ class Logged : AppCompatActivity() {
         init {
             try {
                 input = BufferedReader(InputStreamReader(clientSocket.getInputStream()))
+
             } catch (e: IOException) {
                 e.printStackTrace()
             }
@@ -146,6 +149,7 @@ class Logged : AppCompatActivity() {
             while (!Thread.currentThread().isInterrupted) {
                 try {
                     val read = input!!.readLine()
+                    Log.e("PDM",read)
                     updateConversationHandler?.post(updateUIThread(read))
                 } catch (e: IOException) {
                     e.printStackTrace()
